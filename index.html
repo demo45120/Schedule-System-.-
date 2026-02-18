@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>สกร.ประจำจังหวัดชลบุรี - Schedule Management</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    body { font-family: 'Anuphan', sans-serif; background: #f8fafc; color: #1e293b; }
+    .event-card { transition: all 0.2s ease-out; border-left: 6px solid transparent; }
+    .event-card:hover { transform: translateY(-2px); box-shadow: 0 12px 20px -8px rgba(0, 0, 0, 0.1); }
+    .custom-modal-bg { background-color: rgba(15, 23, 42, 0.8); backdrop-filter: blur(4px); }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+    /* ===== Monthly calendar (fixed cell, not expand by text) ===== */
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 1px;
+    }
+    .calendar-day {
+      height: 120px;           /* ✅ คงที่ ไม่ยืดตามข้อความ */
+      overflow: hidden;
+      position: relative;
+    }
+    .month-chip {
+      font-size: 10px;
+      line-height: 1.1;
+      padding: 4px 6px;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0; /* slate-200 */
+      background: #f8fafc;       /* slate-50 */
+      color: #334155;            /* slate-700 */
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .month-more {
+      font-size: 10px;
+      font-weight: 800;
+      color: #475569;            /* slate-600 */
+    }
+
+    /* ===== Heatmap ===== */
+    .hm-bar{
+      position:absolute; top:0; left:0; right:0;
+      height:6px;
+      border-bottom-left-radius:14px;
+      border-bottom-right-radius:14px;
+      opacity:.95;
+    }
+    .hm-dot{
+      width:8px; height:8px; border-radius:9999px;
+      border:2px solid #fff;
+      box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+    }
+    .hm-l0 { background:#e2e8f0; } /* 0 */
+    .hm-l1 { background:#93c5fd; } /* 1-2 */
+    .hm-l2 { background:#60a5fa; } /* 3-5 */
+    .hm-l3 { background:#a78bfa; } /* 6-9 */
+    .hm-l4 { background:#f59e0b; } /* 10-14 */
+    .hm-l5 { background:#ef4444; } /* 15+ */
+  </style>
+</head>
+
+<body class="antialiased">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 w-full bg-white border-b border-slate-200 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16 items-center">
+        <div class="flex items-center space-x-3">
+          <div class="bg-indigo-600 p-2 rounded-xl">
+            <i data-lucide="calendar" class="text-white w-6 h-6"></i>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold text-slate-900 leading-tight">สกร.ประจำจังหวัดชลบุรี</h1>
+            <p class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Schedule System v3.3</p>
+          </div>
+        </div>
+        <div id="user-nav" class="flex items-center space-x-3"></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+      <!-- Sidebar -->
+      <aside class="lg:col-span-3 space-y-6">
+        <div id="admin-actions" class="hidden">
+          <button onclick="openUserManagement()" class="w-full bg-amber-400 hover:bg-amber-500 text-white p-4 rounded-[2rem] shadow-lg shadow-amber-100 flex items-center justify-center font-bold transition-all mb-4">
+            <i data-lucide="users" class="w-5 h-5 mr-2"></i> จัดการสมาชิก/อนุมัติ
+          </button>
+        </div>
+
+        <div class="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
+          <h2 class="text-sm font-bold text-slate-800 mb-6 flex items-center">
+            <i data-lucide="filter" class="w-4 h-4 mr-2 text-indigo-500"></i> ตัวกรองข้อมูล
+          </h2>
+
+          <div class="space-y-4">
+            <div>
+              <label class="text-[10px] font-bold text-slate-400 uppercase mb-1 block">ค้นหากิจกรรม</label>
+              <input type="text" id="search-input" oninput="refreshView()" placeholder="ชื่อโครงการ..." class="w-full px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20">
+            </div>
+            <div>
+              <label class="text-[10px] font-bold text-slate-400 uppercase mb-1 block">กรองตามสมาชิก</label>
+              <select id="user-filter" onchange="refreshView()" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none cursor-pointer"></select>
+            </div>
+            <div>
+              <label class="text-[10px] font-bold text-slate-400 uppercase mb-1 block">เลือกช่วงเวลา</label>
+              <input type="date" id="date-filter" onchange="refreshView()" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-sm">
+            </div>
+            <button onclick="setToday(); refreshView();" class="w-full text-[10px] font-black text-indigo-600 hover:text-indigo-800 py-2 uppercase tracking-widest transition">Back to Today</button>
+          </div>
+        </div>
+
+        <div class="bg-indigo-600 p-8 rounded-[2rem] text-white shadow-xl shadow-indigo-100">
+          <p class="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-1">กิจกรรมเดือนนี้</p>
+          <div class="flex items-baseline space-x-2">
+            <span id="stat-count" class="text-4xl font-black">0</span>
+            <span class="text-sm font-medium opacity-80">รายการ</span>
+          </div>
+
+          <div class="mt-5 grid grid-cols-3 gap-2 text-[10px] font-bold text-indigo-100">
+            <div class="flex items-center gap-2"><span class="hm-dot hm-l0"></span>0</div>
+            <div class="flex items-center gap-2"><span class="hm-dot hm-l1"></span>1-2</div>
+            <div class="flex items-center gap-2"><span class="hm-dot hm-l2"></span>3-5</div>
+            <div class="flex items-center gap-2"><span class="hm-dot hm-l3"></span>6-9</div>
+            <div class="flex items-center gap-2"><span class="hm-dot hm-l4"></span>10-14</div>
+            <div class="flex items-center gap-2"><span class="hm-dot hm-l5"></span>15+</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Display -->
+      <div class="lg:col-span-9 space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div class="flex bg-white p-1 rounded-2xl border border-slate-200 shadow-sm">
+            <button onclick="setViewMode('week')" id="btn-week" class="px-8 py-2.5 rounded-xl text-sm font-bold transition-all bg-indigo-600 text-white shadow-md">รายสัปดาห์</button>
+            <button onclick="setViewMode('month')" id="btn-month" class="px-8 py-2.5 rounded-xl text-sm font-bold transition-all text-slate-400 hover:text-slate-600">รายเดือน</button>
+          </div>
+
+          <button id="add-btn" onclick="openAddModal()" class="hidden bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-2xl font-bold text-sm shadow-xl shadow-indigo-200 flex items-center transition-all active:scale-95">
+            <i data-lucide="plus" class="w-4 h-4 mr-2"></i> สร้างกิจกรรมใหม่
+          </button>
+        </div>
+
+        <div id="display-area" class="space-y-10 min-h-[500px]"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal System -->
+  <div id="modal-container" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 custom-modal-bg">
+    <div id="modal-content" class="bg-white w-full max-w-xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200"></div>
+  </div>
+
+  <script>
+    /** =========================
+     *  STATE (server-driven)
+     *  ========================= */
+    let users = [];            // approved users only
+    let eventsRaw = [];        // raw events from server (1 แถว = 1 กิจกรรม)
+    let eventsView = [];       // expanded events for rendering (แตกหลายวัน)
+    let currentUser = null;
+    let viewMode = 'week';
+
+    const TOKEN_KEY = 'wangnoi_token';
+
+    const THAI_DAYS = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
+    const THAI_MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+    const BORDER_COLORS = ['border-rose-400', 'border-amber-400', 'border-pink-400', 'border-emerald-400', 'border-orange-400', 'border-sky-400', 'border-indigo-400'];
+
+    function getToken(){ return localStorage.getItem(TOKEN_KEY) || ""; }
+    function setToken(t){ t ? localStorage.setItem(TOKEN_KEY,t) : localStorage.removeItem(TOKEN_KEY); }
+
+    /** ===== API Helper ===== */
+    async function apiCall(endpoint, method = 'GET', data = null) {
+      const opts = {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
+        }
+      };
+      if (data) opts.body = JSON.stringify(data);
+
+      try {
+        const res = await fetch(`/api${endpoint}`, opts);
+        return await res.json();
+      } catch (e) {
+        console.error('API Error:', e);
+        return { ok: false, message: 'Network error' };
+      }
+    }
+
+    /** ===== Heatmap level ===== */
+    function heatLevel_(n){
+      if(!n || n <= 0) return { cls: 'hm-l0' };
+      if(n <= 2)  return { cls: 'hm-l1' };
+      if(n <= 5)  return { cls: 'hm-l2' };
+      if(n <= 9)  return { cls: 'hm-l3' };
+      if(n <= 14) return { cls: 'hm-l4' };
+      return { cls: 'hm-l5' };
+    }
+
+    /** ===== Multi-day expansion ===== */
+    function expandMultiDayEvents_(eventsList){
+      const out = [];
+      for(const e of (eventsList || [])){
+        const start = String(e.date || '');
+        const end = String(e.endDate || e.date || '');
+
+        // 1 วัน
+        if(!start || !end || start === end){
+          out.push({ ...e, _occId: String(e.id), _baseId: String(e.id) });
+          continue;
+        }
+
+        const d0 = new Date(start + "T00:00:00");
+        const d1 = new Date(end + "T00:00:00");
+        if(isNaN(d0) || isNaN(d1) || d1 < d0){
+          out.push({ ...e, _occId: String(e.id), _baseId: String(e.id) });
+          continue;
+        }
+
+        // แตกเป็นวันๆ
+        for(let d = new Date(d0); d <= d1; d.setDate(d.getDate() + 1)){
+          const dayStr = toISODateLocal(d);
+          out.push({
+            ...e,
+            _occId: `${e.id}:${dayStr}`,
+            _baseId: String(e.id),
+            _isMultiDay: true,
+            _occDate: dayStr,
+            date: dayStr,
+          });
+        }
+      }
+      return out;
+    }
+
+    function rebuildView_(){
+      eventsView = expandMultiDayEvents_(eventsRaw || []);
+    }
+
+    function init() {
+      setToday();
+
+      apiCall('/bootstrap')
+        .then((res) => {
+          if(res && res.ok){
+            currentUser = res.user || null;
+            users = res.users || [];
+            eventsRaw = res.events || [];
+            rebuildView_();
+
+            updateAuthUI();
+            populateUserFilters();
+            refreshView();
+          } else {
+            updateAuthUI();
+            refreshView();
+          }
+        })
+        .catch((err) => {
+          console.error(err);
+          updateAuthUI();
+          refreshView();
+        });
+    }
+
+    function setToday() {
+      document.getElementById('date-filter').value = toISODateLocal(new Date());
+    }
+
+    function updateAuthUI() {
+      const nav = document.getElementById('user-nav');
+      const adminMenu = document.getElementById('admin-actions');
+      const addBtn = document.getElementById('add-btn');
+
+      if (!currentUser) {
+        nav.innerHTML = `
+          <button onclick="showLogin()" class="text-indigo-600 font-bold text-sm px-4 py-2">เข้าสู่ระบบ</button>
+          <button onclick="showRegister()" class="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-100">สมัครสมาชิก</button>
+        `;
+        adminMenu.classList.add('hidden');
+        addBtn.classList.add('hidden');
+      } else {
+        nav.innerHTML = `
+          <div class="flex items-center space-x-3 bg-slate-50 p-1.5 pl-4 rounded-2xl border border-slate-100">
+            <div class="flex flex-col items-end">
+              <span class="text-xs font-bold text-slate-700">${escapeHtml(currentUser.fullname)}</span>
+              <span class="text-[9px] font-bold text-indigo-500 uppercase tracking-tighter">${currentUser.role === 'admin' ? 'Administrator' : 'Staff'}</span>
+            </div>
+            <button onclick="logout()" class="p-2 bg-white text-rose-500 rounded-xl border border-slate-200 shadow-sm hover:bg-rose-50 transition"><i data-lucide="log-out" class="w-4 h-4"></i></button>
+          </div>
+        `;
+        addBtn.classList.remove('hidden');
+        if(currentUser.role === 'admin') adminMenu.classList.remove('hidden');
+        else adminMenu.classList.add('hidden');
+      }
+      lucide.createIcons();
+    }
+
+    function refreshView() {
+      const area = document.getElementById('display-area');
+      const search = document.getElementById('search-input').value.toLowerCase();
+      const userFilter = document.getElementById('user-filter').value;
+      const dateRef = document.getElementById('date-filter').value;
+
+      const filtered = (eventsView || []).filter(e => {
+        const matchSearch = (String(e.title||'') + (e.loc||'') + (e.dress||'')).toLowerCase().includes(search);
+        const matchUser = !userFilter || (e.participants || []).some(p => p.username === userFilter);
+        return matchSearch && matchUser;
+      });
+
+      if (viewMode === 'week') renderWeeklyDetailed(area, filtered, dateRef);
+      else renderMonthly(area, filtered, dateRef);
+
+      lucide.createIcons();
+    }
+
+    function renderWeeklyDetailed(container, list, dateStr) {
+      const start = getMonday(new Date(dateStr));
+      let html = '';
+      let totalCount = 0;
+
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        const dStr = toISODateLocal(d);
+
+        const dayEvents = (list || [])
+          .filter(e => e.date === dStr)
+          .sort((a,b) => String(a.time).localeCompare(String(b.time)));
+
+        const isToday = dStr === toISODateLocal(new Date());
+        totalCount += dayEvents.length;
+
+        html += `
+          <section class="space-y-4">
+            <div class="flex items-center space-x-4">
+              <div class="flex flex-col items-center justify-center w-14 h-14 ${isToday ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 border-indigo-600' : 'bg-white text-slate-800 border-slate-200'} rounded-2xl border">
+                <span class="text-[9px] font-black uppercase tracking-tighter">${THAI_DAYS[d.getDay()].substring(0,2)}</span>
+                <span class="text-xl font-black">${d.getDate()}</span>
+              </div>
+              <div class="h-px flex-1 bg-slate-200"></div>
+              <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${THAI_MONTHS[d.getMonth()]}</span>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4">
+              ${dayEvents.length > 0 ? dayEvents.map(e => `
+                <div onclick="showDetail('${escapeAttr(e._occId || e.id)}')" class="event-card bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm cursor-pointer group flex flex-col md:flex-row gap-6 ${BORDER_COLORS[d.getDay()]}">
+                  <div class="flex-1">
+                    <div class="flex justify-between items-start mb-2">
+                      <div class="pr-4">
+                        <h3 class="text-lg font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">${escapeHtml(e.title)}</h3>
+                        ${e._isMultiDay ? `<div class="mt-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">กิจกรรมหลายวัน</div>` : ''}
+                      </div>
+                      <div class="flex items-center text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg shrink-0">
+                        <i data-lucide="clock" class="w-3.5 h-3.5 mr-1.5"></i>
+                        <span class="text-xs font-black">${escapeHtml(e.time)} น.</span>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                      <div class="flex items-center text-sm text-slate-500"><i data-lucide="map-pin" class="w-4 h-4 mr-2 text-rose-400"></i><span>${escapeHtml(e.loc || '-')}</span></div>
+                      <div class="flex items-center text-sm text-slate-500"><i data-lucide="shirt" class="w-4 h-4 mr-2 text-amber-500"></i><span>${escapeHtml(e.dress || '-')}</span></div>
+                    </div>
+                  </div>
+                  <div class="md:w-64">
+                    <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">ผู้เข้าร่วม</p>
+                    <div class="flex flex-wrap gap-1.5">
+                      ${(e.participants||[]).map(p => `<span class="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold">${escapeHtml(p.fullname)}</span>`).join('')}
+                    </div>
+                  </div>
+                </div>
+              `).join('') : `<div class="py-6 text-center opacity-20 italic text-xs font-bold text-slate-400">ไม่มีกิจกรรม</div>`}
+            </div>
+          </section>
+        `;
+      }
+
+      container.innerHTML = html;
+
+      // ✅ สถิติ: นับ "เดือนนี้" แบบอิง eventsRaw (ไม่งั้น multi-day จะนับซ้ำ)
+      const monthPrefix = `${new Date(dateStr).getFullYear()}-${String(new Date(dateStr).getMonth()+1).padStart(2,'0')}-`;
+      const monthCount = (eventsView || []).filter(e => String(e.date||'').startsWith(monthPrefix)).length;
+      document.getElementById('stat-count').innerText = monthCount;
+
+      lucide.createIcons();
+    }
+
+    function renderMonthly(container, list, dateStr) {
+      const date = new Date(dateStr);
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const firstDay = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const todayStr = toISODateLocal(new Date());
+
+
+      // ✅ stats: กิจกรรมเดือนนี้ (นับจาก list ที่เป็น view ก็ได้ เพราะเราอยากให้ heatmap สะท้อนรายวันจริง)
+      const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
+      const monthCount = (list || []).filter(e => String(e.date || '').startsWith(monthPrefix)).length;
+      document.getElementById('stat-count').innerText = monthCount;
+
+      let html = `
+        <div class="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm">
+          <div class="flex justify-between items-center mb-8">
+            <div>
+              <h2 class="text-2xl font-black text-slate-800">${THAI_MONTHS[month]} ${year + 543}</h2>
+              <p class="text-[11px] text-slate-500 font-bold mt-1">Heatmap: สีเข้ม = กิจกรรมเยอะ (คลิกวันที่เพื่อดูทั้งหมด)</p>
+            </div>
+            <div class="flex space-x-2">
+              <button onclick="changeMonth(-1)" class="p-3 bg-slate-50 rounded-2xl hover:bg-slate-100 transition"><i data-lucide="chevron-left"></i></button>
+              <button onclick="changeMonth(1)" class="p-3 bg-slate-50 rounded-2xl hover:bg-slate-100 transition"><i data-lucide="chevron-right"></i></button>
+            </div>
+          </div>
+
+          <div class="calendar-grid bg-slate-100 rounded-3xl overflow-hidden">
+            ${["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"].map(d => `<div class="bg-slate-50 p-4 text-center text-[10px] font-black text-slate-400 uppercase">${d}</div>`).join('')}
+      `;
+
+      let day = 1;
+      for (let i = 0; i < 42; i++) {
+        if (i >= firstDay && day <= daysInMonth) {
+          const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const dayEvents = (list || [])
+            .filter(e => e.date === dStr)
+            .sort((a,b) => String(a.time).localeCompare(String(b.time)));
+
+          const n = dayEvents.length;
+          const hm = heatLevel_(n);
+          const isToday = dStr === todayStr;
+
+          const maxShow = 3;
+          const shown = dayEvents.slice(0, maxShow);
+          const more = n - shown.length;
+
+          html += `
+            <div onclick="showDayEvents('${escapeAttr(dStr)}')"
+                 class="calendar-day bg-white p-3 hover:bg-slate-50 cursor-pointer transition relative"
+                 title="กิจกรรม ${n} รายการ">
+
+              <div class="hm-bar ${hm.cls}"></div>
+
+              <div class="flex items-center justify-between pt-1">
+                <span class="w-8 h-8 flex items-center justify-center text-sm font-black
+                  ${isToday ? 'bg-indigo-600 text-white rounded-full shadow' : 'text-slate-700'}">${day}</span>
+
+                <div class="flex items-center gap-2">
+                  <span class="hm-dot ${hm.cls}"></span>
+                  ${n ? `<span class="text-[10px] font-black bg-indigo-50 text-indigo-700 px-2 py-1 rounded-xl">${n}</span>` : ``}
+                </div>
+              </div>
+
+              <div class="mt-2 space-y-1">
+                ${shown.map(e => `
+                  <div class="month-chip">
+                    <span class="text-indigo-700 font-black">${escapeHtml(e.time)}</span>
+                    <span> ${escapeHtml(e.title)}</span>
+                  </div>
+                `).join('')}
+                ${more > 0 ? `<div class="month-more mt-1">+${more} รายการ</div>` : ``}
+              </div>
+
+            </div>
+          `;
+          day++;
+        } else {
+          html += `<div class="calendar-day bg-slate-50/60"></div>`;
+        }
+
+        if (day > daysInMonth && (i + 1) % 7 === 0) break;
+      }
+
+      html += `</div></div>`;
+      container.innerHTML = html;
+      lucide.createIcons();
+    }
+
+    /** ===== Day modal (ดูรายการทั้งหมดของวัน) ===== */
+    function showDayEvents(dStr) {
+      const dayEvents = (eventsView || [])
+        .filter(e => e.date === dStr)
+        .sort((a,b) => String(a.time).localeCompare(String(b.time)));
+
+      const title = new Date(dStr).toLocaleDateString('th-TH', { dateStyle: 'full' });
+
+      renderModal(`
+        <div class="p-10">
+          <div class="flex justify-between items-start mb-6">
+            <div>
+              <span class="text-[10px] font-black bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full uppercase">Day View</span>
+              <h2 class="text-2xl font-black text-slate-800 mt-3 leading-tight">${escapeHtml(title)}</h2>
+              <p class="text-[11px] text-slate-500 font-bold mt-1">รวม ${dayEvents.length} รายการ</p>
+            </div>
+            <button onclick="closeModal()"><i data-lucide="x" class="text-slate-300 hover:text-slate-500 transition"></i></button>
+          </div>
+
+          <div class="space-y-3 max-h-[55vh] overflow-y-auto pr-2 custom-scrollbar">
+            ${
+              dayEvents.length
+              ? dayEvents.map(e => `
+                <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-200 hover:bg-white transition cursor-pointer"
+                     onclick="closeModal(); showDetail('${escapeAttr(e._occId || e.id)}')">
+                  <div class="flex items-center justify-between">
+                    <div class="font-black text-indigo-700 text-sm">${escapeHtml(e.time)} น.</div>
+                    <div class="text-[10px] font-black text-slate-400 uppercase">${escapeHtml(e.createdByName || '')}</div>
+                  </div>
+                  <div class="mt-2 font-black text-slate-800">${escapeHtml(e.title)}</div>
+                  <div class="mt-2 flex flex-col gap-1 text-xs text-slate-500 font-bold">
+                    <div class="flex items-center"><i data-lucide="map-pin" class="w-4 h-4 mr-2 text-rose-400"></i>${escapeHtml(e.loc || '-')}</div>
+                    <div class="flex items-center"><i data-lucide="shirt" class="w-4 h-4 mr-2 text-amber-500"></i>${escapeHtml(e.dress || '-')}</div>
+                  </div>
+                  ${e._isMultiDay ? `<div class="mt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">กิจกรรมหลายวัน</div>` : ``}
+                </div>
+              `).join('')
+              : `<div class="py-10 text-center text-slate-400 font-bold">ไม่มีกิจกรรมในวันนี้</div>`
+            }
+          </div>
+
+          <div class="mt-8 flex gap-3">
+            <button onclick="closeModal()" class="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold">ปิด</button>
+            <button onclick="closeModal(); document.getElementById('date-filter').value='${escapeAttr(dStr)}'; setViewMode('week'); refreshView();"
+                    class="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100">
+              ดูแบบรายสัปดาห์
+            </button>
+          </div>
+        </div>
+      `);
+
+      lucide.createIcons();
+    }
+
+    /** ===== DETAIL ===== */
+    function findViewEvent_(occId){
+      return (eventsView || []).find(x => x._occId === occId || String(x.id) === String(occId)) || null;
+    }
+    function findRawEvent_(baseId){
+      return (eventsRaw || []).find(x => String(x.id) === String(baseId)) || null;
+    }
+
+    function showDetail(occId) {
+      const eView = findViewEvent_(occId);
+      if(!eView) return;
+
+      const baseId = eView._baseId || eView.id;
+      const eBase = findRawEvent_(baseId) || eView;
+
+      // permission check (ยึดวัน/เวลาเริ่มต้นของกิจกรรมจริง)
+      const eventDateTime = new Date(`${eBase.date}T${eBase.time}`);
+      const now = new Date();
+      const isPast = now > eventDateTime;
+
+      let canModify = false;
+      let reason = "";
+
+      if (currentUser) {
+        if (currentUser.role === 'admin') {
+          canModify = true;
+        } else if (currentUser.username === eBase.createdBy) {
+          if (!isPast) canModify = true;
+          else reason = "กิจกรรมผ่านไปแล้ว (กรุณาติดต่อแอดมิน)";
+        }
+      }
+
+      const isMulti = (String(eBase.endDate || eBase.date) !== String(eBase.date));
+      const rangeText = isMulti
+        ? `${new Date(eBase.date).toLocaleDateString('th-TH', { dateStyle:'long' })} - ${new Date(eBase.endDate).toLocaleDateString('th-TH', { dateStyle:'long' })}`
+        : `${new Date(eBase.date).toLocaleDateString('th-TH', { dateStyle:'long' })}`;
+
+      renderModal(`
+        <div class="p-10">
+          <div class="flex justify-between items-start mb-4">
+            <span class="text-[10px] font-black bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full uppercase">Activity Details</span>
+            <button onclick="closeModal()"><i data-lucide="x" class="text-slate-300"></i></button>
+          </div>
+
+          <h2 class="text-2xl font-black text-slate-800 mb-4 leading-tight">${escapeHtml(eBase.title)}</h2>
+
+          ${isMulti ? `
+            <div class="mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+              <p class="text-[9px] font-black text-slate-400 uppercase mb-2">ช่วงวันที่</p>
+              <div class="text-sm font-black text-slate-800">${escapeHtml(rangeText)}</div>
+              <div class="mt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">กำลังดูในวันที่: ${escapeHtml(eView.date)}</div>
+            </div>
+          ` : ``}
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+              <p class="text-[9px] font-black text-slate-400 uppercase mb-2">วันและเวลา</p>
+              <div class="text-sm font-bold">${escapeHtml(rangeText)}</div>
+              <div class="text-sm font-black text-indigo-600 mt-1">${escapeHtml(eBase.time)} น.${isMulti && eBase.endTime ? ` <span class="text-slate-400 font-black">→</span> ${escapeHtml(eBase.endTime)} น.` : ``}</div>
+            </div>
+            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+              <p class="text-[9px] font-black text-slate-400 uppercase mb-2">สถานที่</p>
+              <div class="text-sm font-bold">${escapeHtml(eBase.loc || 'ไม่ระบุ')}</div>
+            </div>
+            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+              <p class="text-[9px] font-black text-slate-400 uppercase mb-2">การแต่งกาย</p>
+              <div class="text-sm font-bold">${escapeHtml(eBase.dress || 'ปกติ')}</div>
+            </div>
+            <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+              <p class="text-[9px] font-black text-slate-400 uppercase mb-2">บันทึกโดย</p>
+              <div class="text-sm font-bold text-emerald-600">${escapeHtml(eBase.createdByName || '-')}</div>
+              <p class="text-[9px] text-slate-400">${escapeHtml(eBase.createdAt || '')}</p>
+            </div>
+          </div>
+
+          <div class="mb-8">
+            <p class="text-[10px] font-black text-slate-400 uppercase mb-3">ผู้เข้าร่วม (${(eBase.participants||[]).length})</p>
+            <div class="flex flex-wrap gap-2">
+              ${(eBase.participants||[]).map(p => `<span class="px-3 py-1.5 bg-white text-slate-600 rounded-xl text-xs font-bold border border-slate-200">${escapeHtml(p.fullname)}</span>`).join('')}
+            </div>
+          </div>
+
+          ${reason ? `<div class="mb-6 p-4 bg-rose-50 text-rose-500 text-xs font-bold rounded-2xl flex items-center border border-rose-100">
+            <i data-lucide="alert-triangle" class="w-4 h-4 mr-2"></i> ${escapeHtml(reason)}
+          </div>` : ''}
+
+          <div class="flex gap-3">
+            <button onclick="closeModal()" class="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold">ปิดหน้าต่าง</button>
+            ${canModify ? `
+              <button onclick="openEditModal('${escapeAttr(baseId)}')" class="px-6 py-4 bg-indigo-600 text-white rounded-2xl font-bold transition hover:bg-indigo-700 shadow-lg shadow-indigo-100"><i data-lucide="edit-3" class="w-5 h-5"></i></button>
+              <button onclick="deleteEvent('${escapeAttr(baseId)}')" class="px-6 py-4 bg-rose-50 text-rose-500 rounded-2xl font-bold transition hover:bg-rose-100"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+            ` : ''}
+          </div>
+        </div>
+      `);
+      lucide.createIcons();
+    }
+
+    /** ===== ADD/EDIT/DELETE (เรียก server) ===== */
+    function openAddModal() {
+      if(!currentUser) return alert('กรุณาเข้าสู่ระบบ');
+      renderFormModal();
+    }
+
+    function openEditModal(baseId) {
+      const e = findRawEvent_(baseId);
+      if(!e) return alert('ไม่พบกิจกรรม');
+      renderFormModal(e);
+    }
+
+    function renderFormModal(eventData = null) {
+      const isEdit = !!eventData;
+      const partUsernames = isEdit ? (eventData.participants||[]).map(p => p.username) : [];
+
+      const startDateVal = isEdit ? (eventData.date || '') : '';
+      const endDateVal = isEdit ? (eventData.endDate || eventData.date || '') : '';
+      const startTimeVal = isEdit ? (eventData.time || '') : '';
+      const endTimeVal = isEdit ? (eventData.endTime || eventData.time || '') : '';
+
+      renderModal(`
+        <div class="p-10">
+          <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-black text-slate-800">${isEdit ? 'แก้ไขกิจกรรม' : 'สร้างกิจกรรมใหม่'}</h2>
+            <button onclick="closeModal()"><i data-lucide="x" class="text-slate-300 hover:text-slate-500 transition"></i></button>
+          </div>
+
+          <div class="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+            <input id="ev-id" type="hidden" value="${isEdit ? escapeAttr(eventData.id) : ''}">
+
+            <div>
+              <label class="text-[10px] font-bold text-slate-400 uppercase block mb-1">หัวข้อกิจกรรม</label>
+              <input id="ev-title" type="text" value="${isEdit ? escapeAttr(eventData.title) : ''}" class="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl">
+            </div>
+
+            <!-- ✅ ช่วงวัน/เวลา -->
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="text-[10px] font-bold text-slate-400 uppercase block mb-1">วันที่เริ่ม</label>
+                <input id="ev-date" type="date" value="${escapeAttr(startDateVal)}" class="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl">
+              </div>
+              <div>
+                <label class="text-[10px] font-bold text-slate-400 uppercase block mb-1">เวลาเริ่ม</label>
+                <input id="ev-time" type="time" value="${escapeAttr(startTimeVal)}" class="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="text-[10px] font-bold text-slate-400 uppercase block mb-1">วันที่สิ้นสุด</label>
+                <input id="ev-end-date" type="date" value="${escapeAttr(endDateVal)}" class="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                <p class="mt-1 text-[10px] font-bold text-slate-400">ถ้าเป็น 1 วัน ให้ใส่วันเดียวกับวันที่เริ่ม</p>
+              </div>
+              <div>
+                <label class="text-[10px] font-bold text-slate-400 uppercase block mb-1">เวลาเลิก (ถ้ามี)</label>
+                <input id="ev-end-time" type="time" value="${escapeAttr(endTimeVal)}" class="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl">
+              </div>
+            </div>
+
+            <div>
+              <label class="text-[10px] font-bold text-slate-400 uppercase block mb-1">สถานที่</label>
+              <input id="ev-loc" type="text" value="${isEdit ? escapeAttr(eventData.loc || '') : ''}" class="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl">
+            </div>
+
+            <div>
+              <label class="text-[10px] font-bold text-slate-400 uppercase block mb-1">การแต่งกาย</label>
+              <input id="ev-dress" type="text" value="${isEdit ? escapeAttr(eventData.dress || '') : ''}" class="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-2xl">
+            </div>
+
+            <div>
+              <label class="text-[10px] font-bold text-slate-400 uppercase block mb-1">ผู้เข้าร่วม</label>
+              <div class="grid grid-cols-2 gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                ${users.map(u => `
+                  <label class="flex items-center space-x-2 text-xs font-bold text-slate-600">
+                    <input type="checkbox" name="ev-part" value="${escapeAttr(u.username)}" ${partUsernames.includes(u.username) ? 'checked' : ''}>
+                    <span>${escapeHtml(u.fullname)}</span>
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-8 flex space-x-3">
+            <button onclick="saveEvent()" class="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-lg">บันทึกข้อมูล</button>
+            <button onclick="closeModal()" class="flex-1 bg-slate-100 text-slate-400 py-4 rounded-2xl font-bold">ยกเลิก</button>
+          </div>
+        </div>
+      `);
+      lucide.createIcons();
+    }
+
+    function saveEvent() {
+      const id = document.getElementById('ev-id').value;
+      const title = document.getElementById('ev-title').value.trim();
+      const date = document.getElementById('ev-date').value;
+      const time = document.getElementById('ev-time').value;
+
+      const end_date = document.getElementById('ev-end-date').value || date;
+      const end_time = document.getElementById('ev-end-time').value || time;
+
+      const loc = document.getElementById('ev-loc').value.trim();
+      const dress = document.getElementById('ev-dress').value.trim();
+
+      const partUsernames = Array.from(document.querySelectorAll('input[name="ev-part"]:checked')).map(c => c.value);
+      if(!title || !date || !time) return alert('กรุณาระบุหัวข้อ วัน และเวลา');
+
+      // ✅ กัน end_date < date
+      if(end_date && date && new Date(end_date + "T00:00:00") < new Date(date + "T00:00:00")){
+        return alert('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม');
+      }
+
+      const partDetails = users
+        .filter(u => partUsernames.includes(u.username))
+        .map(u => ({ username: u.username, fullname: u.fullname }));
+
+      apiCall('/events', 'POST', { id, title, date, time, end_date, end_time, loc, dress, participants: partDetails })
+        .then((res) => {
+          if(res && res.ok && res.event) {
+            const idx = (eventsRaw || []).findIndex(x => String(x.id) === String(res.event.id));
+            if(idx >= 0) eventsRaw[idx] = res.event;
+            else eventsRaw.push(res.event);
+
+            rebuildView_();
+            closeModal();
+            refreshView();
+          } else {
+            alert((res && res.message) ? res.message : 'บันทึกไม่สำเร็จ');
+          }
+        })
+        .catch((err) => {
+          console.error(err);
+          alert('บันทึกไม่สำเร็จ');
+        });
+    }
+
+    function deleteEvent(baseId) {
+      if(!confirm('ยืนยันการลบกิจกรรมนี้?')) return;
+
+      apiCall(`/events/${baseId}`, 'DELETE')
+        .then((res) => {
+          if(res && res.ok) {
+            eventsRaw = (eventsRaw || []).filter(e => String(e.id) !== String(baseId));
+            rebuildView_();
+            closeModal();
+            refreshView();
+          } else {
+            alert((res && res.message) ? res.message : 'ลบไม่สำเร็จ');
+          }
+        })
+        .catch((err) => {
+          console.error(err);
+          alert('ลบไม่สำเร็จ');
+        });
+    }
+
+    /** ===== AUTH ===== */
+    function showLogin() {
+      renderModal(`
+        <div class="p-10" id="login-modal">
+          <div class="flex justify-between items-center mb-8">
+            <h2 class="text-3xl font-black text-slate-800">เข้าสู่ระบบ</h2>
+            <button onclick="closeModal()"><i data-lucide="x" class="text-slate-300 hover:text-slate-500 transition"></i></button>
+          </div>
+          <div class="space-y-4">
+            <input id="login-u" type="text" placeholder="Username" class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl">
+            <input id="login-p" type="password" placeholder="Password" class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl">
+            <button onclick="handleLogin()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-xl">เข้าสู่ระบบ</button>
+          </div>
+          <p class="mt-4 text-center text-sm text-slate-500">ทดลองใช้: admin / admin123</p>
+        </div>
+      `);
+      lucide.createIcons();
+    }
+
+    function handleLogin() {
+      const u = document.getElementById('login-u').value.trim();
+      const p = document.getElementById('login-p').value;
+
+      apiCall('/login', 'POST', { username: u, password: p })
+        .then((res) => {
+          if(res && res.ok){
+            setToken(res.token);
+            currentUser = res.user;
+            updateAuthUI();
+
+            apiCall('/bootstrap')
+              .then((boot) => {
+                if(boot && boot.ok){
+                  currentUser = boot.user || currentUser;
+                  users = boot.users || users;
+                  eventsRaw = boot.events || eventsRaw;
+                  rebuildView_();
+                  populateUserFilters();
+                  refreshView();
+                }
+                closeModal();
+              });
+          } else {
+            alert((res && res.message) ? res.message : 'เข้าสู่ระบบไม่สำเร็จ');
+          }
+        })
+        .catch((err) => {
+          console.error(err);
+          alert('เข้าสู่ระบบไม่สำเร็จ');
+        });
+    }
+
+    function showRegister() {
+      renderModal(`
+        <div class="p-10">
+          <div class="flex justify-between items-center mb-8">
+            <h2 class="text-3xl font-black text-slate-800">สมัครสมาชิก</h2>
+            <button onclick="closeModal()"><i data-lucide="x" class="text-slate-300 hover:text-slate-500 transition"></i></button>
+          </div>
+          <div class="space-y-4">
+            <input id="reg-fullname" type="text" placeholder="ชื่อ-นามสกุล จริง" class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl">
+            <input id="reg-u" type="text" placeholder="Username (อังกฤษ)" class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl">
+            <input id="reg-p" type="password" placeholder="Password" class="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl">
+            <button onclick="handleRegister()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-xl">ส่งคำขอสมัคร</button>
+          </div>
+        </div>
+      `);
+      lucide.createIcons();
+    }
+
+    function handleRegister() {
+      const f = document.getElementById('reg-fullname').value.trim();
+      const u = document.getElementById('reg-u').value.trim();
+      const p = document.getElementById('reg-p').value;
+
+      if(!f || !u || !p) return alert('กรุณากรอกข้อมูลให้ครบ');
+
+      apiCall('/register', 'POST', { fullname: f, username: u, password: p })
+        .then((res) => {
+          if(res && res.ok){
+            alert(res.message || 'สมัครเรียบร้อย! โปรดรอแอดมินอนุมัติ');
+            closeModal();
+          } else {
+            alert((res && res.message) ? res.message : 'สมัครไม่สำเร็จ');
+          }
+        })
+        .catch((err) => {
+          console.error(err);
+          alert('สมัครไม่สำเร็จ');
+        });
+    }
+
+    function logout() {
+      setToken("");
+      currentUser = null;
+      updateAuthUI();
+      refreshView();
+    }
+
+    /** ===== ADMIN USER MANAGEMENT ===== */
+    function openUserManagement() {
+      if(!currentUser || currentUser.role !== 'admin') return;
+
+      apiCall('/admin/users')
+        .then((res) => {
+          if(!(res && res.ok)) return alert('โหลดสมาชิกไม่สำเร็จ');
+          const list = (res.users || []).filter(u => u.username !== 'admin');
+
+          renderModal(`
+            <div class="p-10">
+              <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-black text-slate-800">จัดการสมาชิก</h2>
+                <button onclick="closeModal()"><i data-lucide="x" class="text-slate-300 hover:text-slate-500 transition"></i></button>
+              </div>
+
+              <div class="space-y-3 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar mb-8">
+                ${list.length > 0 ? list.map(u => `
+                  <div class="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-100 transition">
+                    <div>
+                      <p class="font-bold text-sm text-slate-800">${escapeHtml(u.fullname)}</p>
+                      <p class="text-[10px] font-bold ${u.approved ? 'text-emerald-500' : 'text-amber-500'} uppercase tracking-tighter">
+                        ${u.approved ? 'Approved' : 'Pending Approval'}
+                      </p>
+                    </div>
+                    <div class="flex space-x-1">
+                      ${!u.approved ? `
+                        <button onclick="approveUser('${escapeAttr(u.username)}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition">อนุมัติ</button>
+                      ` : ''}
+                      <button onclick="deleteUser('${escapeAttr(u.username)}')" class="bg-rose-50 hover:bg-rose-100 text-rose-500 px-4 py-2 rounded-xl text-xs font-bold transition">ลบ</button>
+                    </div>
+                  </div>
+                `).join('') : '<p class="text-center py-8 text-slate-400 text-sm">ยังไม่มีสมาชิกอื่นในระบบ</p>'}
+              </div>
+
+              <div class="flex">
+                <button onclick="closeModal()" class="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold transition hover:bg-slate-200">ปิดหน้าต่าง</button>
+              </div>
+            </div>
+          `);
+          lucide.createIcons();
+        })
+        .catch((err) => {
+          console.error(err);
+          alert('โหลดสมาชิกไม่สำเร็จ');
+        });
+    }
+
+    function approveUser(username){
+      if(!confirm('อนุมัติผู้ใช้นี้?')) return;
+      apiCall(`/admin/approve/${username}`, 'POST')
+        .then((res) => {
+          if(res && res.ok){
+            apiCall('/bootstrap')
+              .then((boot)=>{
+                if(boot && boot.ok){
+                  currentUser = boot.user || currentUser;
+                  users = boot.users || users;
+                  eventsRaw = boot.events || eventsRaw;
+                  rebuildView_();
+                  populateUserFilters();
+                  refreshView();
+                  openUserManagement();
+                }
+              });
+          } else alert(res && res.message ? res.message : 'อนุมัติไม่สำเร็จ');
+        })
+        .catch((err)=>{ console.error(err); alert('อนุมัติไม่สำเร็จ'); });
+    }
+
+    function deleteUser(username){
+      if(!confirm('ลบผู้ใช้นี้?')) return;
+      apiCall(`/admin/users/${username}`, 'DELETE')
+        .then((res) => {
+          if(res && res.ok){
+            apiCall('/bootstrap')
+              .then((boot)=>{
+                if(boot && boot.ok){
+                  currentUser = boot.user || currentUser;
+                  users = boot.users || users;
+                  eventsRaw = boot.events || eventsRaw;
+                  rebuildView_();
+                  populateUserFilters();
+                  refreshView();
+                  openUserManagement();
+                }
+              });
+          } else alert(res && res.message ? res.message : 'ลบไม่สำเร็จ');
+        })
+        .catch((err)=>{ console.error(err); alert('ลบไม่สำเร็จ'); });
+    }
+
+    /** ===== utilities ===== */
+    function renderModal(html) {
+      const c = document.getElementById('modal-container');
+      const inner = document.getElementById('modal-content');
+      inner.innerHTML = html;
+      c.classList.remove('hidden');
+    }
+    function closeModal() { document.getElementById('modal-container').classList.add('hidden'); }
+
+    function toISODateLocal(d){
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,'0');
+      const day = String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${day}`;
+    }
+
+
+    function setViewMode(m) {
+      viewMode = m;
+      const bw = document.getElementById('btn-week');
+      const bm = document.getElementById('btn-month');
+      if(m === 'week') {
+        bw.className = "px-8 py-2.5 rounded-xl text-sm font-bold transition-all bg-indigo-600 text-white shadow-md";
+        bm.className = "px-8 py-2.5 rounded-xl text-sm font-bold transition-all text-slate-400 hover:text-slate-600";
+      } else {
+        bm.className = "px-8 py-2.5 rounded-xl text-sm font-bold transition-all bg-indigo-600 text-white shadow-md";
+        bw.className = "px-8 py-2.5 rounded-xl text-sm font-bold transition-all text-slate-400 hover:text-slate-600";
+      }
+      refreshView();
+    }
+
+    function getMonday(d) {
+      const date = new Date(d);
+      const day = date.getDay();
+      const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+      return new Date(date.setDate(diff));
+    }
+
+    function changeMonth(offset) {
+      const input = document.getElementById('date-filter');
+      const d = new Date(input.value);
+      d.setMonth(d.getMonth() + offset);
+      input.value = d.toISOString().split('T')[0];
+      refreshView();
+    }
+
+    function populateUserFilters() {
+      const sel = document.getElementById('user-filter');
+      sel.innerHTML = '<option value="">ทุกคน</option>';
+      (users || []).forEach(u => { sel.innerHTML += `<option value="${escapeAttr(u.username)}">${escapeHtml(u.fullname)}</option>`; });
+    }
+
+    function escapeHtml(s){
+      return String(s ?? '').replace(/[&<>"']/g, (m) => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[m]));
+    }
+    function escapeAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }
+
+    window.onload = init;
+  </script>
+</body>
+</html>

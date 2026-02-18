@@ -1,0 +1,54 @@
+🚀 SCHEDULE SYSTEM - STATUS REPORT
+==================================
+
+✅ DEPLOYED & RUNNING
+✅ Server: Port 3000 (http://localhost:3000)
+✅ ngrok: https://unmusical-julietta-macroclimatically.ngrok-free.dev
+✅ Frontend: HTML5 + Responsive Design
+✅ Backend: Express.js + Google Sheets API (ready)
+
+📊 CURRENT CONFIGURATION
+========================
+- Spreadsheet ID: 1vU_n01bnUwy03wFXhrG0aiHjsB_JHDUZ3bxTB1MKhok
+- Demo User: admin / admin123
+- Mode: Demo (in-memory storage)
+- API: Google Sheets (standby - needs credentials.json)
+
+📝 WHAT YOU CAN DO NOW
+======================
+✅ Use the app with demo data (resets on server restart)
+✅ Login as admin / admin123
+✅ Create/edit/delete events (local only)
+✅ Manage users (demo)
+✅ Share via ngrok URL
+
+❌ TO USE GOOGLE SHEETS (OPTIONAL)
+===================================
+1. Create credentials.json from Google Cloud Console
+2. Place it in /workspaces/Schedule-System-.-/
+3. Share Spreadsheet with Service Account email
+4. Restart server (npm start)
+5. See: ✅ Google Sheets API initialized
+
+📚 DOCUMENTATION
+================
+- SETUP.md - Complete setup guide
+- setup-check.sh - Run diagnostics
+- quick-setup.sh - Quick Google Sheets setup
+
+🔗 CURRENT URLS
+===============
+App: https://unmusical-julietta-macroclimatically.ngrok-free.dev
+Spreadsheet: https://docs.google.com/spreadsheets/d/1vU_n01bnUwy03wFXhrG0aiHjsB_JHDUZ3bxTB1MKhok
+Google Cloud: https://console.cloud.google.com
+
+💡 QUICK COMMANDS
+=================
+Check status:       curl http://localhost:3000/api/bootstrap
+Run server:         npm start
+Stop server:        pkill -f 'npm start'
+Check ngrok:        ps aux | grep ngrok
+View logs:          npm start (shows in terminal)
+
+✨ READY TO GO!
+===============

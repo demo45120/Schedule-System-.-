@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+credentials.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Runtime
+*.log
+logs/
+dist/
+build/
+
+# Cloudflare Tunnel (local only, don't commit)
+.cloudflared/
+CLOUDFLARE_TUNNEL.md
+cloudflared.log
+
+# Git
+.git/
+
+# OS
+.DS_Store
+Thumbs.db
