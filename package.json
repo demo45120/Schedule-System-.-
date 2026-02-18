@@ -2,6 +2,8 @@
   "name": "schedule-system",
   "version": "1.0.0",
   "description": "Schedule Management System with Google Sheets",
+  "license": "MIT",
+  "author": "Schedule System Team",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
